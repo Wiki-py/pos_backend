@@ -35,13 +35,13 @@ INSTALLED_APPS = [
     'django_filters',
     
     # Local apps
-    'apps.users',
-    'apps.products',
-    'apps.inventory',
-    'apps.sales',
-    'apps.branches',
-    'apps.reports',
-    'apps.notifications',
+    'users',
+    'products',
+    'inventory',
+    'sales',
+    'branches',
+    'reports',
+    'notifications',
 ]
 
 MIDDLEWARE = [
