@@ -46,3 +46,4 @@ class BranchViewSet(viewsets.ModelViewSet):
         from apps.users.serializers import UserSerializer
         serializer = UserSerializer(employees, many=True)
         return Response(serializer.data)
+    

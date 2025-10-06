@@ -42,3 +42,5 @@ class NotificationViewSet(viewsets.ModelViewSet):
         recent_notifications = self.get_queryset().order_by('-created_at')[:20]
         serializer = self.get_serializer(recent_notifications, many=True)
         return Response(serializer.data)
+    
+    
