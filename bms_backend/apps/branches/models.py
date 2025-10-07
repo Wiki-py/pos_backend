@@ -23,6 +23,7 @@ class Branch(models.Model):
     manager = models.CharField(max_length=100, blank=True)
     opening_date = models.DateField(null=True, blank=True)
     capacity = models.IntegerField(default=0)
+    
     description = models.TextField(blank=True)
     color_theme = models.CharField(max_length=100, default='from-emerald-400 to-teal-500')
     is_active = models.BooleanField(default=True)
