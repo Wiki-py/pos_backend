@@ -11,48 +11,62 @@ class ProductSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source='category.name', read_only=True)
     branch_name = serializers.CharField(source='branch.name', read_only=True)
     profit = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
-    stock_status = serializers.SerializerMethodField()  # Changed to SerializerMethodField
-
+    stock_status = serializers.SerializerMethodField()
+    is_low_stock = serializers.BooleanField(read_only=True)
+    
     class Meta:
         model = Product
-        fields = '__all__'
+        fields = [
+            'id', 'name', 'description', 'sku', 'cost_price', 'selling_price',
+            'quantity', 'category', 'branch', 'image', 'barcode', 
+            'low_stock_threshold', 'is_active', 'created_at', 'updated_at',
+            'category_name', 'branch_name', 'profit', 'stock_status', 'is_low_stock'
+        ]
         read_only_fields = ('created_at', 'updated_at')
 
     def get_stock_status(self, obj):
         """
         Calculate stock status based on current stock levels
         """
-        # If you have a quantity field
-        if hasattr(obj, 'quantity'):
-            current_stock = obj.quantity
-        # If you have a current_stock field  
-        elif hasattr(obj, 'current_stock'):
-            current_stock = obj.current_stock
-        else:
-            return 'unknown'
+        current_stock = obj.quantity
         
-        # If you have low_stock_threshold field
-        if hasattr(obj, 'low_stock_threshold') and obj.low_stock_threshold:
-            if current_stock <= obj.low_stock_threshold:
-                return 'low'
-            elif current_stock == 0:
-                return 'out_of_stock'
-            else:
-                return 'in_stock'
+        if current_stock == 0:
+            return 'out_of_stock'
+        elif current_stock <= obj.low_stock_threshold:
+            return 'low_stock'
         else:
-            # Default logic if no threshold
-            if current_stock <= 0:
-                return 'out_of_stock'
-            elif current_stock <= 10:  # Default low stock threshold
-                return 'low'
-            else:
-                return 'in_stock'
+            return 'in_stock'
+    
+    def get_is_low_stock(self, obj):
+        """
+        Boolean field to quickly check if product is low on stock
+        """
+        return obj.quantity <= obj.low_stock_threshold
 
 class ProductCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
-        fields = ('name', 'description', 'sku', 'cost_price', 'selling_price', 
-                 'quantity', 'category', 'branch', 'image', 'barcode', 'low_stock_threshold')
+        fields = [
+            'name', 'description', 'sku', 'cost_price', 'selling_price', 
+            'quantity', 'category', 'branch', 'image', 'barcode', 
+            'low_stock_threshold', 'is_active'
+        ]
+    
+    def validate_sku(self, value):
+        """
+        Ensure SKU is unique across all products
+        """
+        if Product.objects.filter(sku=value).exists():
+            raise serializers.ValidationError("Product with this SKU already exists.")
+        return value
+    
+    def validate_quantity(self, value):
+        """
+        Ensure quantity is not negative
+        """
+        if value < 0:
+            raise serializers.ValidationError("Quantity cannot be negative.")
+        return value
 
 class LowStockAlertSerializer(serializers.Serializer):
     product_id = serializers.IntegerField()

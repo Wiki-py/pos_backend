@@ -11,7 +11,7 @@ from rest_framework.views import APIView
 
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.AllowAny]  # Allow unauthenticated user creation
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -20,9 +20,19 @@ class UserViewSet(viewsets.ModelViewSet):
             return UserUpdateSerializer
         return UserSerializer
 
+    def get_permissions(self):
+        if self.action == 'create':
+            self.permission_classes = [permissions.AllowAny]
+        else:
+            self.permission_classes = [permissions.IsAuthenticated]
+        return super().get_permissions()
+
     def get_queryset(self):
         user = self.request.user
-        if user.role == 'admin':
+        if not user.is_authenticated:
+            # For unauthenticated users (during creation), return empty queryset
+            return User.objects.none()
+        elif user.role == 'admin':
             return User.objects.all()
         elif user.role == 'manager':
             return User.objects.filter(branch=user.branch)

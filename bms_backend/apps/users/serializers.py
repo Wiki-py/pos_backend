@@ -18,14 +18,34 @@ class UserCreateSerializer(serializers.ModelSerializer):
         fields = ('id', 'username', 'email', 'first_name', 'last_name', 
                  'role', 'phone', 'branch', 'password', 'password_confirm')
 
+    def validate_username(self, value):
+        if User.objects.filter(username=value).exists():
+            raise serializers.ValidationError("Username already exists.")
+        return value
+
+    def validate_email(self, value):
+        if User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("Email already exists.")
+        return value
+
     def validate(self, attrs):
         if attrs['password'] != attrs['password_confirm']:
             raise serializers.ValidationError({"password": "Password fields didn't match."})
+        
+        # Validate branch if provided
+        if attrs.get('branch'):
+            from apps.branches.models import Branch
+            if not Branch.objects.filter(id=attrs['branch'].id).exists():
+                raise serializers.ValidationError({"branch": "Invalid branch selected."})
+        
         return attrs
 
     def create(self, validated_data):
         validated_data.pop('password_confirm')
+        password = validated_data.pop('password')
         user = User.objects.create_user(**validated_data)
+        user.set_password(password)
+        user.save()
         return user
 
 class UserUpdateSerializer(serializers.ModelSerializer):

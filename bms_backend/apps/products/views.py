@@ -2,10 +2,11 @@ from rest_framework import viewsets, permissions
 from .models import Product, Category
 from .serializers import (
     ProductSerializer, ProductCreateSerializer, 
-    CategorySerializer, LowStockAlertSerializer
+    CategorySerializer, LowStockAlertSerializer,
+    StockAdjustmentSerializer
 )
 from django_filters.rest_framework import DjangoFilterBackend
-from django.db.models import F
+from django.db.models import F, Q, Sum
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import status, filters
@@ -83,3 +84,78 @@ class ProductViewSet(viewsets.ModelViewSet):
                 {"error": "Invalid quantity"}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
+    
+    @action(detail=True, methods=['post'])
+    def adjust_stock(self, request, pk=None):
+        """Adjust stock with transaction type"""
+        product = self.get_object()
+        serializer = StockAdjustmentSerializer(data=request.data)
+        
+        if serializer.is_valid():
+            quantity = serializer.validated_data['quantity']
+            transaction_type = serializer.validated_data['transaction_type']
+            
+            if transaction_type == 'in':
+                product.quantity += quantity
+            elif transaction_type == 'out':
+                if product.quantity >= quantity:
+                    product.quantity -= quantity
+                else:
+                    return Response(
+                        {"error": "Insufficient stock"}, 
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            
+            product.save()
+            return Response(ProductSerializer(product).data)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=False, methods=['get'])
+    def search(self, request):
+        """Advanced product search"""
+        query = request.GET.get('q', '')
+        category = request.GET.get('category')
+        min_price = request.GET.get('min_price')
+        max_price = request.GET.get('max_price')
+        
+        queryset = self.get_queryset()
+        
+        if query:
+            queryset = queryset.filter(
+                Q(name__icontains=query) | 
+                Q(sku__icontains=query) | 
+                Q(description__icontains=query)
+            )
+        
+        if category:
+            queryset = queryset.filter(category_id=category)
+        
+        if min_price:
+            queryset = queryset.filter(selling_price__gte=min_price)
+        
+        if max_price:
+            queryset = queryset.filter(selling_price__lte=max_price)
+        
+        serializer = ProductSerializer(queryset, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def dashboard_stats(self, request):
+        """Get product dashboard statistics"""
+        queryset = self.get_queryset()
+        
+        stats = {
+            'total_products': queryset.count(),
+            'low_stock_count': queryset.filter(
+                quantity__gt=0, 
+                quantity__lte=F('low_stock_threshold')
+            ).count(),
+            'out_of_stock_count': queryset.filter(quantity=0).count(),
+            'total_value': queryset.aggregate(
+                total=Sum(F('quantity') * F('selling_price'))
+            )['total'] or 0,
+            'categories_count': Category.objects.count()
+        }
+        
+        return Response(stats)
